@@ -6,14 +6,28 @@ import argparse
 
 ACTIONS = ['switch', 'status']
 PRIMARY_OUT = 'eDP1'
+VERBOSE = 0
 
 ###########################################
 def run_xrandr(arg_list):
-    '''run_xrandr(arg_list) -> ()
+    '''run_xrandr(arg_list) -> string
 
-Runs xrandr with given string as arguments
+Runs xrandr with given arguments and returns the output
 '''
-    return subprocess.getoutput('xrandr ' + ' '.join(arg_list))
+    command = 'xrandr ' + ' '.join(arg_list)
+    if VERBOSE:
+        print("log: running # " + command)
+
+    return subprocess.getoutput(command)
+
+
+###########################################
+def run_xrandr_out(output, arg_list):
+    '''run_xrandr_out(output, arg_list) -> ()
+
+Runs xrandr for given output with given arguments and returns the output
+'''
+    return run_xrandr(['--output', output] + arg_list)
 
 
 ###########################################
@@ -23,11 +37,16 @@ if __name__ == '__main__':
                         nargs='?', default='status',
                         help='action to be performed (one of {' +
                         ', '.join(ACTIONS) + '})')
+    parser.add_argument('-v', '--verbose', help='increase verbosity level',
+                        action='store_true')
 
     try:
         args = parser.parse_args()
     except Exception as ex:
         errprint(str(ex))
+
+    if args.verbose:
+        VERBOSE = 1
 
     xrandr_out = run_xrandr(['-d', ':0.0'])
     connected_lines = []
@@ -54,19 +73,19 @@ if __name__ == '__main__':
 
     if args.action == 'switch':
         if len(dev_connected) == 1:
-            run_xrandr(['--output HDMI2', '--off'])
-            run_xrandr(['--output eDP1', '--auto'])
+            # run_xrandr(['--output HDMI2', '--off'])
+            run_xrandr_out(PRIMARY_OUT, ['--auto'])
             sys.exit(0)
 
         if len(dev_active) == 2:
-            run_xrandr(['--output eDP1', '--auto'])
-            run_xrandr(['--output HDMI2', '--off'])
+            run_xrandr_out(PRIMARY_OUT, ['--auto'])
+            run_xrandr_out(secondary_out, ['--off'])
         elif dev_active == ['eDP1']:
-            run_xrandr(['--output eDP1', '--off'])
-            run_xrandr(['--output HDMI2', '--auto'])
+            run_xrandr_out(PRIMARY_OUT, ['--off'])
+            run_xrandr_out(secondary_out, ['--auto'])
         elif dev_active == ['HDMI2']:
-            run_xrandr(['--output eDP1', '--auto'])
-            run_xrandr(['--output HDMI2', '--right-of eDP1', '--auto'])
+            run_xrandr_out(PRIMARY_OUT, ['--auto'])
+            run_xrandr_out(secondary_out, ['--right-of eDP1', '--auto'])
         else:
             assert False
     else:
