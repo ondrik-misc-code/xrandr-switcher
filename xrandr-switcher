@@ -5,8 +5,38 @@ import sys
 import argparse
 
 ACTIONS = ['switch', 'status']
-PRIMARY_OUT = 'eDP1'
 VERBOSE = 0
+
+###########################################
+class Device:
+    '''Device
+
+Represents an X device
+'''
+    ###########################################
+    def __init__(self, name, status, primary, active):
+        '''__init__(self, name, status, primary, active) -> cnstr
+
+Constructor
+'''
+        self.name = name
+        self.status = status
+        self.primary = primary
+        self.active = active
+
+    ###########################################
+    def __str__(self):
+        '''__str__(self) -> string
+
+Returns a string
+    '''
+        res = ''
+        res += 'Name:    ' + self.name + '\n'
+        res += 'Status:  ' + self.status + '\n'
+        res += 'Primary: ' + str(self.primary) + '\n'
+        res += 'Active:  ' + str(self.active) + '\n'
+        return res
+
 
 ###########################################
 def run_xrandr(arg_list):
@@ -31,8 +61,40 @@ Runs xrandr for given output with given arguments and returns the output
 
 
 ###########################################
+def parse_xrandr(xrandr_output):
+    '''parse_xrandr(string) -> dict
+
+Parses the output of XRandR
+'''
+    dev_dict = { }
+    cur_dev = ''
+    for line in xrandr_out.split('\n'):
+        if re.search(r'^Screen', line):
+            continue        # skip 'Screen' lines
+
+        dev_re = re.compile(r'''
+          ^                                              # start of line
+          (?P<name>\w+)\                                 # name of the device
+          (?P<status>(dis)?connected)\                   # connected?
+          (?P<primary>primary\ )?                        # primary output?
+          (?P<res_off>[0-9]+x[0-9]+\+[0-9]+\+[0-9]+\ )?  # resolution + offset
+          ''', re.VERBOSE)
+        m = dev_re.match(line)
+        if m:
+            # print('line: ' + line)
+            dev = Device(name=m.group('name'),
+                         status=m.group('status'),
+                         primary=(m.group('primary') != None),
+                         active=(m.group('res_off') != None))
+            print(str(dev))
+            dev_dict[dev.name] = dev
+
+    return dev_dict
+
+
+###########################################
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Display switcher')
+    parser = argparse.ArgumentParser(description='Display switcher for XRandR')
     parser.add_argument('action', metavar='action', choices=ACTIONS,
                         nargs='?', default='status',
                         help='action to be performed (one of {' +
@@ -49,52 +111,64 @@ if __name__ == '__main__':
         VERBOSE = 1
 
     xrandr_out = run_xrandr(['-d', ':0.0'])
-    connected_lines = []
-    for line in xrandr_out.split('\n'):
-        if re.search(r'\bconnected', line):
-            connected_lines.append(line)
+    dev_dict = parse_xrandr(xrandr_out)
+    print(str(dev_dict))
 
-    dev_connected = []
-    for line in connected_lines:
-        m = re.match(r'^\w+\b', line)
-        dev_connected.append(m.group(0))
+    # connected_lines = []
+    # for line in xrandr_out.split('\n'):
+    #     if re.search(r'\bconnected', line):
+    #         connected_lines.append(line)
+    #
+    # dev_connected = []
+    # for line in connected_lines:
+    #     m = re.match(r'^\w+\b', line)
+    #     dev_connected.append(m.group(0))
+    #
+    # dev_primary = []
+    # for line in connected_lines:
+    #     if re.search(r'\bconnected primary', line):
+    #         m = re.match(r'^\w+\b', line)
+    #         dev_primary.append(m.group(0))
 
-    dev_active = []
-    for line in connected_lines:
-        if re.search(r'\bconnected (primary )?[0-9]+', line):
-            m = re.match(r'^\w+\b', line)
-            dev_active.append(m.group(0))
-
+    dev_connected = [(k, v) for k, v in dev_dict.items() if v.status == 'connected']
     assert len(dev_connected) in {1, 2}
+
+    # dev_primary = filter(lambda x, y: y.primary, dev_dict.items())
+    dev_primary = [(k, v) for k, v in dev_dict.items() if v.primary]
+    assert len(dev_primary) == 1
+    primary_out = dev_primary[0][0]
+
+    dev_active = [(k, v) for k, v in dev_dict.items() if v.active]
+    assert len(dev_active) in {1, 2}
 
     secondary_out = ''
     if len(dev_connected) == 2:
-        secondary_out = set(dev_connected) - {PRIMARY_OUT}
+        secondary_out = set(dev_connected) - {primary_out}
         assert len(secondary_out) == 1
-        secondary_out = secondary_out.pop()
+        secondary_out = secondary_out.pop()[0]
 
     if args.action == 'switch':
         if len(dev_connected) == 1:
             # run_xrandr(['--output HDMI2', '--off'])
-            run_xrandr_out(PRIMARY_OUT, ['--auto'])
+            run_xrandr_out(primary_out, ['--auto'])
             sys.exit(0)
 
         if len(dev_active) == 2:
-            run_xrandr_out(PRIMARY_OUT, ['--auto'])
+            run_xrandr_out(primary_out, ['--auto'])
             run_xrandr_out(secondary_out, ['--off'])
-        elif dev_active == [PRIMARY_OUT]:
-            run_xrandr_out(PRIMARY_OUT, ['--off'])
+        elif dev_active == [primary_out]:
+            run_xrandr_out(primary_out, ['--off'])
             run_xrandr_out(secondary_out, ['--auto'])
         elif dev_active == [secondary_out]:
-            run_xrandr_out(PRIMARY_OUT, ['--auto'])
-            run_xrandr_out(secondary_out, ['--right-of ' + PRIMARY_OUT, '--auto'])
+            run_xrandr_out(primary_out, ['--auto'])
+            run_xrandr_out(secondary_out, ['--right-of ' + primary_out, '--auto'])
         else:
             assert False
     else:
         assert args.action == 'status'
 
-        print(connected_lines)
-        print('Connected devices:  ' + ' '.join(dev_connected))
-        print('Active devices:     ' + ' '.join(dev_active))
-        print('Primary output:     ' + PRIMARY_OUT)
+        # print(connected_lines)
+        print('Connected devices:  ' + ' '.join([dev_name for dev_name, dev in dev_connected]))
+        print('Active devices:     ' + ' '.join([dev_name for dev_name, dev in dev_active]))
+        print('Primary output:     ' + primary_out)
         print('Secondary output:   ' + ('None' if not secondary_out else secondary_out))
