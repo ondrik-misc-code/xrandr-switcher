@@ -130,7 +130,7 @@ if __name__ == '__main__':
     #         m = re.match(r'^\w+\b', line)
     #         dev_primary.append(m.group(0))
 
-    dev_connected = [(k, v) for k, v in dev_dict.items() if v.status == 'connected']
+    dev_connected = [k for k, v in dev_dict.items() if v.status == 'connected']
     assert len(dev_connected) in {1, 2}
 
     # dev_primary = filter(lambda x, y: y.primary, dev_dict.items())
@@ -138,14 +138,14 @@ if __name__ == '__main__':
     assert len(dev_primary) == 1
     primary_out = dev_primary[0][0]
 
-    dev_active = [(k, v) for k, v in dev_dict.items() if v.active]
+    dev_active = [k for k, v in dev_dict.items() if v.active]
     assert len(dev_active) in {1, 2}
 
     secondary_out = ''
     if len(dev_connected) == 2:
         secondary_out = set(dev_connected) - {primary_out}
         assert len(secondary_out) == 1
-        secondary_out = secondary_out.pop()[0]
+        secondary_out = secondary_out.pop()
 
     if args.action == 'switch':
         if len(dev_connected) == 1:
@@ -168,7 +168,7 @@ if __name__ == '__main__':
         assert args.action == 'status'
 
         # print(connected_lines)
-        print('Connected devices:  ' + ' '.join([dev_name for dev_name, dev in dev_connected]))
-        print('Active devices:     ' + ' '.join([dev_name for dev_name, dev in dev_active]))
+        print('Connected devices:  ' + ' '.join(dev_connected))
+        print('Active devices:     ' + ' '.join(dev_active))
         print('Primary output:     ' + primary_out)
         print('Secondary output:   ' + ('None' if not secondary_out else secondary_out))
