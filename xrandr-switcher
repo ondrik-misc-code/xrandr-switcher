@@ -23,6 +23,9 @@ Constructor
         self.status = status
         self.primary = primary
         self.active = active
+        self.resolutions = []
+        self.current_res = None
+        self.recommended_res = None
 
     ###########################################
     def __str__(self):
@@ -31,10 +34,13 @@ Constructor
 Returns a string
     '''
         res = ''
-        res += 'Name:    ' + self.name + '\n'
-        res += 'Status:  ' + self.status + '\n'
-        res += 'Primary: ' + str(self.primary) + '\n'
-        res += 'Active:  ' + str(self.active) + '\n'
+        res += 'Name:        ' + self.name + '\n'
+        res += 'Status:      ' + self.status + '\n'
+        res += 'Primary:     ' + str(self.primary) + '\n'
+        res += 'Active:      ' + str(self.active) + '\n'
+        res += 'Resolutions: ' + ' '.join([w + 'x' + h for (w, h) in self.resolutions]) + '\n'
+        res += 'Current res: ' + ('' if self.current_res is None else self.current_res[0] + 'x' + self.current_res[1]) + '\n'
+        res += 'Recomm. res: ' + ('' if self.recommended_res is None else self.recommended_res[0] + 'x' + self.recommended_res[1]) + '\n'
         return res
 
 
@@ -69,15 +75,17 @@ Parses the output of XRandR
     dev_dict = { }
     cur_dev = ''
     for line in xrandr_out.split('\n'):
+        # PROCESSING SCREEN LINES
         if re.search(r'^Screen', line):
             continue        # skip 'Screen' lines
 
+        # PROCESSING DEVICE LINES
         dev_re = re.compile(r'''
-          ^                                              # start of line
+          ^                                              # > start of line
           (?P<name>\w+)\                                 # name of the device
           (?P<status>(dis)?connected)\                   # connected?
           (?P<primary>primary\ )?                        # primary output?
-          (?P<res_off>[0-9]+x[0-9]+\+[0-9]+\+[0-9]+\ )?  # resolution + offset
+          (?P<size_off>[0-9]+x[0-9]+\+[0-9]+\+[0-9]+\ )? # size + offset
           ''', re.VERBOSE)
         m = dev_re.match(line)
         if m:
@@ -85,9 +93,40 @@ Parses the output of XRandR
             dev = Device(name=m.group('name'),
                          status=m.group('status'),
                          primary=(m.group('primary') != None),
-                         active=(m.group('res_off') != None))
-            print(str(dev))
+                         active=(m.group('size_off') != None))
             dev_dict[dev.name] = dev
+            cur_dev = dev.name
+            continue
+
+        # PROCESSING RESOLUTION LINES
+        res_re = re.compile(r'''
+          ^\ +                                           # > start of line
+          (?P<width>[0-9]+)                              # screen width
+          x                                              # > separator
+          (?P<height>[0-9]+)                             # screen height
+          (?P<is_i>i)?                                   # the 'i' parameter
+          \ +                                            # > separator
+          (?P<refresh>[0-9\.]+)                          # refresh rate
+          (?P<is_cur_res>\*)?                            # active setting
+          (?P<is_rec_res>\+)?                            # recommended setting
+          ''', re.VERBOSE)
+        m = res_re.match(line)
+        if m:
+            if m.group('is_i') is None:
+                resolution = (m.group('width'), m.group('height'))
+                dev_dict[cur_dev].resolutions.append(resolution)
+                if m.group('is_cur_res') is not None:
+                    dev_dict[cur_dev].current_res = resolution
+                if m.group('is_rec_res') is not None:
+                    dev_dict[cur_dev].recommended_res = resolution
+            continue
+
+        print('failing: ' + line)
+        # shouldn't get here
+        assert False
+
+    for dev in dev_dict.values():
+        print(str(dev))
 
     return dev_dict
 
@@ -113,22 +152,6 @@ if __name__ == '__main__':
     xrandr_out = run_xrandr(['-d', ':0.0'])
     dev_dict = parse_xrandr(xrandr_out)
     print(str(dev_dict))
-
-    # connected_lines = []
-    # for line in xrandr_out.split('\n'):
-    #     if re.search(r'\bconnected', line):
-    #         connected_lines.append(line)
-    #
-    # dev_connected = []
-    # for line in connected_lines:
-    #     m = re.match(r'^\w+\b', line)
-    #     dev_connected.append(m.group(0))
-    #
-    # dev_primary = []
-    # for line in connected_lines:
-    #     if re.search(r'\bconnected primary', line):
-    #         m = re.match(r'^\w+\b', line)
-    #         dev_primary.append(m.group(0))
 
     dev_connected = [k for k, v in dev_dict.items() if v.status == 'connected']
     assert len(dev_connected) in {1, 2}
