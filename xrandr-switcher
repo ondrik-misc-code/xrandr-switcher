@@ -7,6 +7,8 @@ import argparse
 ACTIONS = ['switch', 'status']
 VERBOSE = 0
 
+SCALING = {'3840x2160': '0.75'}
+
 ###########################################
 class Device:
     '''Device
@@ -58,12 +60,37 @@ Runs xrandr with given arguments and returns the output
 
 
 ###########################################
-def run_xrandr_out(output, arg_list):
-    '''run_xrandr_out(output, arg_list) -> ()
+def run_xrandr_for(output, arg_list):
+    '''run_xrandr_for(output, arg_list) -> ()
 
 Runs xrandr for given output with given arguments and returns the output
 '''
     return run_xrandr(['--output', output] + arg_list)
+
+
+###########################################
+def xrandr_turn_off(output):
+    '''xrandr_turn_off(output) -> ()
+
+Turns an output off.
+'''
+    run_xrandr_for(output, ['--off'])
+    return
+
+
+###########################################
+def xrandr_turn_on(output, params=[]):
+    '''xrandr_turn_off(output, params) -> ()
+
+Turns an output on (additionally providing some parameters
+'''
+    additional_params = []
+    scale = SCALING[output]
+    if scale is not None:
+        additional_params.append(['--scale', scale])
+
+    run_xrandr_for(output, ['--auto'] + params + additional_params)
+    return
 
 
 ###########################################
@@ -172,19 +199,16 @@ if __name__ == '__main__':
 
     if args.action == 'switch':
         if len(dev_connected) == 1:
-            # run_xrandr(['--output HDMI2', '--off'])
-            run_xrandr_out(primary_out, ['--auto'])
-            sys.exit(0)
-
-        if len(dev_active) == 2:
-            run_xrandr_out(primary_out, ['--auto'])
-            run_xrandr_out(secondary_out, ['--off'])
+            xrandr_turn_on(primary_out)
+        elif len(dev_active) == 2:
+            xrandr_turn_on(primary_out)
+            xrandr_turn_off(secondary_out)
         elif dev_active == [primary_out]:
-            run_xrandr_out(primary_out, ['--off'])
-            run_xrandr_out(secondary_out, ['--auto'])
+            xrandr_turn_off(primary_out)
+            xrandr_turn_on(secondary_out)
         elif dev_active == [secondary_out]:
-            run_xrandr_out(primary_out, ['--auto'])
-            run_xrandr_out(secondary_out, ['--right-of ' + primary_out, '--auto'])
+            xrandr_turn_on(primary_out)
+            xrandr_turn_on(secondary_out, ['--right-of ' + primary_out])
         else:
             assert False
     else:
