@@ -85,9 +85,8 @@ def xrandr_turn_on(output, params=[]):
 Turns an output on (additionally providing some parameters
 '''
     additional_params = []
-    scale = SCALING[output]
-    if scale is not None:
-        additional_params.append(['--scale', scale])
+    if output in SCALING:
+        additional_params.append(['--scale', SCALING[output]])
 
     run_xrandr_for(output, ['--auto'] + params + additional_params)
     return
