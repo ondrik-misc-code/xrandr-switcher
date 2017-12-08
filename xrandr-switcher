@@ -6,8 +6,9 @@ import argparse
 
 ACTIONS = ['switch', 'status']
 VERBOSE = 0
+DRY = 0
 
-SCALING = {'3840x2160': '0.75'}
+SCALING = {'HDMI2': {'3840x2160': '0.75x0.75'}}
 
 ###########################################
 class Device:
@@ -65,7 +66,8 @@ def run_xrandr_for(output, arg_list):
 
 Runs xrandr for given output with given arguments and returns the output
 '''
-    return run_xrandr(['--output', output] + arg_list)
+    command = ['--output', output] + arg_list
+    return run_xrandr(command)
 
 
 ###########################################
@@ -74,7 +76,11 @@ def xrandr_turn_off(output):
 
 Turns an output off.
 '''
-    run_xrandr_for(output, ['--off'])
+    if DRY:
+        print("Turning " + output + " off")
+    else:
+        run_xrandr_for(output, ['--off'])
+
     return
 
 
@@ -82,13 +88,25 @@ Turns an output off.
 def xrandr_turn_on(output, params=[]):
     '''xrandr_turn_off(output, params) -> ()
 
-Turns an output on (additionally providing some parameters
+Turns an output on (additionally providing some parameters)
 '''
     additional_params = []
-    if output in SCALING:
-        additional_params.append(['--scale', SCALING[output]])
+    if VERBOSE:
+        print("dev_dict[output].recommended_res: " + str(dev_dict[output].recommended_res))
+    if output in SCALING.keys():
+        scaling = SCALING[output]
+        (xres, yres) = dev_dict[output].recommended_res
+        strres = xres + 'x' + yres
+        if strres in scaling.keys():
+            print("Scaling on " + output + ": " + scaling[strres])
+            additional_params.extend(['--scale', scaling[strres]])
 
-    run_xrandr_for(output, ['--auto'] + params + additional_params)
+    command = ['--auto'] + params + additional_params
+    if DRY:
+        print("Turning " + output + " on with " + str(command))
+    else:
+        run_xrandr_for(output, command)
+
     return
 
 
@@ -133,7 +151,7 @@ Parses the output of XRandR
           (?P<is_i>i)?                                   # the 'i' parameter
           \ +                                            # > separator
           (?P<refresh>[0-9\.]+)                          # refresh rate
-          (?P<is_cur_res>\*)?                            # active setting
+          ((?P<is_cur_res>\*)|\ )                          # active setting
           (?P<is_rec_res>\+)?                            # recommended setting
           ''', re.VERBOSE)
         m = res_re.match(line)
@@ -166,6 +184,8 @@ if __name__ == '__main__':
                         ', '.join(ACTIONS) + '})')
     parser.add_argument('-v', '--verbose', help='increase verbosity level',
                         action='store_true')
+    parser.add_argument('--dry', help='do not change the output',
+                        action='store_true')
 
     try:
         args = parser.parse_args()
@@ -174,6 +194,8 @@ if __name__ == '__main__':
 
     if args.verbose:
         VERBOSE = 1
+    if args.dry:
+        DRY = 1
 
     xrandr_out = run_xrandr(['-d', ':0.0'])
     dev_dict = parse_xrandr(xrandr_out)
